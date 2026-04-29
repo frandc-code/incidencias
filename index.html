@@ -270,10 +270,7 @@
     color: #fff; border-color: transparent;
     box-shadow: 0 2px 10px rgba(67,97,238,.35);
   }
-  .vendor-tab.active.v8-tab {
-    background: linear-gradient(135deg,#059669,#0d9488);
-    box-shadow: 0 2px 10px rgba(5,150,105,.35);
-  }
+  /* color per-vendor applied via JS inline style */
   .vendor-tab.ok-tab { border-color: var(--green-border); color: var(--green); background: var(--green-bg); }
   .vendor-tab.ok-tab:hover { border-color: var(--green); }
   .vtab-badge {
@@ -826,6 +823,28 @@ const vendedorNames = {
   30:'Jose Luis', 31:'Dani Almodóvar', 32:'Manolo Lopez', 33:'Omar'
 };
 
+// Paleta de colores por comercial — mismo estilo, distinto matiz
+const vendedorColors = {
+   4: { g: 'linear-gradient(135deg,#4361ee,#7c3aed)', shadow: 'rgba(67,97,238,.35)'   }, // índigo → violeta
+   5: { g: 'linear-gradient(135deg,#0ea5e9,#0284c7)', shadow: 'rgba(14,165,233,.35)'  }, // cielo
+   7: { g: 'linear-gradient(135deg,#8b5cf6,#a855f7)', shadow: 'rgba(139,92,246,.35)'  }, // violeta
+   8: { g: 'linear-gradient(135deg,#059669,#0d9488)', shadow: 'rgba(5,150,105,.35)'   }, // esmeralda
+   9: { g: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,.35)'  }, // ámbar
+  11: { g: 'linear-gradient(135deg,#ef4444,#dc2626)', shadow: 'rgba(239,68,68,.35)'   }, // rojo
+  12: { g: 'linear-gradient(135deg,#0d9488,#0f766e)', shadow: 'rgba(13,148,136,.35)'  }, // petróleo
+  15: { g: 'linear-gradient(135deg,#14b8a6,#0f766e)', shadow: 'rgba(20,184,166,.35)'  }, // teal
+  16: { g: 'linear-gradient(135deg,#6366f1,#4f46e5)', shadow: 'rgba(99,102,241,.35)'  }, // periwinkle
+  18: { g: 'linear-gradient(135deg,#f97316,#ea580c)', shadow: 'rgba(249,115,22,.35)'  }, // naranja
+  19: { g: 'linear-gradient(135deg,#10b981,#047857)', shadow: 'rgba(16,185,129,.35)'  }, // verde
+  30: { g: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', shadow: 'rgba(59,130,246,.35)'  }, // azul
+  31: { g: 'linear-gradient(135deg,#a16207,#92400e)', shadow: 'rgba(161,98,7,.35)'    }, // ocre
+  32: { g: 'linear-gradient(135deg,#0891b2,#0e7490)', shadow: 'rgba(8,145,178,.35)'   }, // cian
+  33: { g: 'linear-gradient(135deg,#b45309,#92400e)', shadow: 'rgba(180,83,9,.35)'   }, // cobre
+};
+function vColor(v) {
+  return vendedorColors[v] || { g: 'linear-gradient(135deg,#64748b,#475569)', shadow: 'rgba(100,116,139,.35)' };
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // MAESTRO — 3781 clientes, 15 comerciales (cargado via JSON.parse)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1206,9 +1225,10 @@ function renderVendorTabs() {
     const hasInc = incV.length > 0;
     const count = incV.length;
     const isActive = currentVendor === v;
-    const isV8 = v === 8;
-    tabs += `<button class="vendor-tab ${isActive?'active':''}${isActive&&isV8?' v8-tab':''}${!hasInc?' ok-tab':''}"
-      onclick="setVendorTab(${v})">
+    const vc = vColor(v);
+    const activeStyle = isActive ? `style="background:${vc.g};box-shadow:0 2px 10px ${vc.shadow};border-color:transparent"` : '';
+    tabs += `<button class="vendor-tab ${isActive?'active':''}${!hasInc?' ok-tab':''}"
+      ${activeStyle} onclick="setVendorTab(${v})">
       V${v}
       ${hasInc ? `<span class="vtab-badge${isActive?' ':' red'}">${count}</span>` : `<span class="vtab-ok">✓</span>`}
     </button>`;
@@ -1253,7 +1273,7 @@ function renderReport() {
       if (!cant.length && !dias.length) return;
       html += `<div class="vendedor-block">
         <div class="vendedor-header open" onclick="toggleVendedor(this)">
-          <div class="vendedor-num" style="background:${v===8?'linear-gradient(135deg,#059669,#0d9488)':'linear-gradient(135deg,var(--accent),var(--accent2))'}">${v}</div>
+          <div class="vendedor-num" style="background:${vColor(v).g}">${v}</div>
           <div class="vendedor-info">
             <div class="vendedor-name">V${v} · ${vendedorNames[v]||''}</div>
             <div class="vendedor-pills">
@@ -1289,7 +1309,7 @@ function renderReport() {
         const yrV = yrAll.filter(r=>r.vSheet===v).sort((a,b)=>a.nombre.localeCompare(b.nombre));
         html += `<div class="vendedor-block">
           <div class="vendedor-header open" onclick="toggleVendedor(this)">
-            <div class="vendedor-num" style="background:linear-gradient(135deg,#0369a1,#0284c7)">${v}</div>
+            <div class="vendedor-num" style="background:${vColor(v).g}">${v}</div>
             <div class="vendedor-info">
               <div class="vendedor-name">V${v} · ${vendedorNames[v]||''}</div>
               <div class="vendedor-pills"><span class="pill-blue" style="background:#fff7ed;color:#c2410c;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;border:1px solid #fed7aa">🟠 ${yrV.length} cliente${yrV.length>1?'s':''}</span></div>
@@ -1309,7 +1329,7 @@ function renderReport() {
     const anyo = vAll.filter(r=>r.has1y).sort((a,b)=>a.nombre.localeCompare(b.nombre));
     const totalInc = cant.length + dias.length + anyo.length;
     html += `<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap">
-      <div style="width:52px;height:52px;border-radius:14px;background:${v===8?'linear-gradient(135deg,#059669,#0d9488)':'linear-gradient(135deg,var(--accent),var(--accent2))'};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;flex-shrink:0">${v}</div>
+      <div style="width:52px;height:52px;border-radius:14px;background:${vColor(v).g};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;flex-shrink:0">${v}</div>
       <div>
         <div style="font-size:18px;font-weight:800;color:var(--text)">V${v} · ${vendedorNames[v]||''}</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px">${totalInc} cliente${totalInc!==1?'s':''} con incidencias</div>
@@ -1436,7 +1456,7 @@ function renderMaestro(q) {
     <div class="maestro-card">
       <span class="cod" style="min-width:110px;font-size:11px;color:var(--text);font-weight:600">${cod}</span>
       <span class="maestro-nombre" style="color:var(--muted);font-size:11px">V${v}</span>
-      <span class="v-badge" style="${v===8?'background:#ecfdf5;border-color:#a7f3d0;color:#059669':''}">V${v}</span>
+      <span class="v-badge" style="background:${vColor(v).g};color:#fff;border-color:transparent">V${v}</span>
       <input class="maestro-input" type="number" min="1" max="99" value="${p}" data-cod="${cod}" title="Fact. permitidas">
       <button onclick="deleteClient('${cod.replace(/'/g,"&#39;")}')" title="Eliminar" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 4px" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">✕</button>
     </div>
