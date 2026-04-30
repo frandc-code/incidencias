@@ -8,7 +8,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Incidencias">
-<meta name="app-version" content="8844a72">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Analizador de Incidencias · Cartera</title>
@@ -100,58 +99,6 @@
     font-weight: 500;
   }
 
-  /* ─────────────────── UPDATE BUTTON ─────────────────── */
-  .btn-update {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 13px; border-radius: var(--r-sm);
-    font-size: 12px; font-weight: 700; cursor: pointer;
-    border: 1.5px solid var(--border2); background: var(--surface2);
-    color: var(--text2); transition: all .2s; font-family: var(--sans);
-    white-space: nowrap;
-  }
-  .btn-update:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
-  .btn-update.checking { color: var(--muted); border-color: var(--border); cursor: default; animation: spin-slow 1.5s linear infinite; }
-  .btn-update.has-update {
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    color: #fff; border-color: transparent;
-    box-shadow: 0 2px 10px rgba(67,97,238,.35);
-    animation: pulse-update 2s ease-in-out infinite;
-  }
-  .btn-update.up-to-date { color: var(--green); border-color: var(--green-border); background: var(--green-bg); cursor: default; }
-  @keyframes pulse-update {
-    0%, 100% { box-shadow: 0 2px 10px rgba(67,97,238,.35); }
-    50% { box-shadow: 0 4px 20px rgba(67,97,238,.6); transform: translateY(-1px); }
-  }
-  .update-modal-overlay {
-    position: fixed; inset: 0; background: rgba(22,25,46,.45);
-    backdrop-filter: blur(4px); z-index: 9999;
-    display: flex; align-items: center; justify-content: center;
-    opacity: 0; pointer-events: none; transition: opacity .25s;
-  }
-  .update-modal-overlay.open { opacity: 1; pointer-events: all; }
-  .update-modal {
-    background: var(--surface); border-radius: var(--r-xl);
-    box-shadow: var(--shadow-lg); padding: 28px 28px 22px;
-    max-width: 420px; width: calc(100% - 32px);
-    transform: translateY(12px); transition: transform .25s;
-  }
-  .update-modal-overlay.open .update-modal { transform: translateY(0); }
-  .update-modal-title { font-size: 17px; font-weight: 800; margin-bottom: 4px; letter-spacing: -.02em; }
-  .update-modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
-  .update-version-row {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: var(--r-md); padding: 12px 14px;
-  }
-  .update-version-item { flex: 1; text-align: center; }
-  .update-version-label { font-size: 10px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
-  .update-version-val { font-size: 18px; font-weight: 800; font-family: var(--mono); letter-spacing: -.02em; }
-  .update-version-val.current { color: var(--muted); }
-  .update-version-val.new { color: var(--accent); }
-  .update-arrow { font-size: 20px; color: var(--muted); }
-  .update-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .update-modal-actions .btn { flex: 1; min-width: 120px; justify-content: center; }
-
   /* ─────────────────── APP TABS ─────────────────── */
   .tabs {
     display: flex; gap: 0;
@@ -180,8 +127,6 @@
     header { padding: 0 12px; }
     .tabs { padding: 0 12px; }
     .date-badge { display: none; }
-    .btn-update { padding: 6px 10px; }
-    #updateLabel { display: none; }
     .logo-sub { display: none; }
   }
   .panel { display: none; }
@@ -663,6 +608,13 @@
 </head>
 <body>
 
+<!-- BANNER DE ACTUALIZACIÓN -->
+<div id="updateBanner" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#4361ee,#7c3aed);color:#fff;border-radius:14px;padding:12px 20px;box-shadow:0 4px 20px rgba(67,97,238,.45);align-items:center;gap:12px;font-family:var(--sans);font-size:13px;font-weight:600;white-space:nowrap;max-width:calc(100vw - 32px);">
+  <span>🚀 Hay una nueva versión disponible</span>
+  <button onclick="applyUpdate()" style="background:#fff;color:#4361ee;border:none;border-radius:8px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:13px;">Actualizar</button>
+  <button onclick="document.getElementById('updateBanner').style.display='none'" style="background:transparent;color:rgba(255,255,255,.7);border:none;cursor:pointer;font-size:18px;line-height:1;padding:0 4px;">×</button>
+</div>
+
 <header>
   <div class="logo">
     <div class="logo-icon">📊</div>
@@ -672,37 +624,10 @@
     </div>
   </div>
   <div class="header-right">
-    <button class="btn-update" id="btnUpdate" onclick="checkForUpdates(true)" title="Comprobar actualizaciones en GitHub">
-      <span id="updateIcon">↻</span>
-      <span id="updateLabel">Actualizar</span>
-    </button>
     <div class="date-badge" id="dateDisplay"></div>
   </div>
 </header>
 
-<!-- UPDATE MODAL -->
-<div class="update-modal-overlay" id="updateModal" onclick="if(event.target===this) closeUpdateModal()">
-  <div class="update-modal">
-    <div class="update-modal-title" id="updateModalTitle">🚀 Nueva versión disponible</div>
-    <div class="update-modal-sub" id="updateModalSub">Hay una actualización lista para instalar.</div>
-    <div class="update-version-row">
-      <div class="update-version-item">
-        <div class="update-version-label">Versión actual</div>
-        <div class="update-version-val current" id="updateCurrentVer">—</div>
-      </div>
-      <div class="update-arrow">→</div>
-      <div class="update-version-item">
-        <div class="update-version-label">Nueva versión</div>
-        <div class="update-version-val new" id="updateNewVer">—</div>
-      </div>
-    </div>
-    <div class="update-modal-actions">
-      <button class="btn btn-primary" id="btnInstallUpdate" onclick="installUpdate()">↻ Actualizar ahora</button>
-      <button class="btn btn-secondary" onclick="closeUpdateModal()">Ahora no</button>
-    </div>
-    <div id="updateNote" style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center;min-height:16px"></div>
-  </div>
-</div>
 
 <div class="tabs">
   <div class="tab active" onclick="switchTab('upload')">📂 Cargar Archivo</div>
@@ -2188,184 +2113,42 @@ function toast(msg) {
 }
 </script>
 <script>
-// ──────────────────────────────────────────────────────────────────────────────
-// AUTO-UPDATE desde GitHub
-// ──────────────────────────────────────────────────────────────────────────────
-
-// ▼▼▼ CONFIGURA AQUÍ TU REPOSITORIO DE GITHUB ▼▼▼
-const GITHUB_USER = 'frandc-code';
-const GITHUB_REPO = 'incidencias';
-const GITHUB_BRANCH = 'main';           
-const GITHUB_FILE = 'index.html';       
-// ▲▲▲ ─────────────────────────────────────────── ▲▲▲
-
-// SHA del commit con el que se instaló este archivo (se incrusta automáticamente al instalar)
-const CURRENT_VERSION = (() => {
-  const m = document.querySelector('meta[name="app-version"]');
-  if (!m || !m.content || m.content === '8844a72') return null; // sin versión conocida
-  return m.content;
-})();
-
-let _remoteVersion = null;
-let _remoteUrl = null;
-let _remoteHtml = null;
-
-function _githubRawUrl() {
-  return `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_FILE}`;
-}
-
-async function _fetchRemoteVersion() {
-  // Usamos raw.githubusercontent.com — tiene CORS abierto y funciona en WebView
-  const rawUrl = _githubRawUrl() + '?t=' + Date.now();
-  const res = await fetch(rawUrl, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Raw fetch: ' + res.status);
-  const html = await res.text();
-
-  // Guardar el html remoto para instalarlo sin descargarlo dos veces
-  _remoteHtml = html;
-
-  // Extraer el SHA del meta app-version del archivo remoto
-  const match = html.match(/<meta name="app-version" content="([^"]+)"/);
-  const remoteSha7 = (match && match[1] !== '8844a72') ? match[1] : null;
-
-  // Extraer la fecha del título o usar hoy como fallback
-  const today = new Date().toISOString().slice(0,10);
-  const version = remoteSha7 ? (today + '-' + remoteSha7) : today;
-
-  return { version, sha: remoteSha7 || 'unknown', fullSha: remoteSha7 || 'unknown' };
-}
-
-async function checkForUpdates(manual = false) {
-  const btn = document.getElementById('btnUpdate');
-  const icon = document.getElementById('updateIcon');
-  const label = document.getElementById('updateLabel');
-
-  // Estado: comprobando
-  btn.className = 'btn-update checking';
-  icon.textContent = '⏳';
-  label.textContent = 'Comprobando...';
-  btn.disabled = true;
-
-  try {
-    const { version, sha } = await _fetchRemoteVersion();
-    _remoteVersion = version;
-    _remoteUrl = _githubRawUrl() + '?nocache=' + sha;
-
-    const currentLabel = CURRENT_VERSION ? CURRENT_VERSION.slice(0,7) : 'desconocida';
-    // Compara SHA completo (7 chars del meta) con SHA del último commit
-    const remoteSha7 = sha.length > 7 ? sha.slice(0,7) : sha;
-    const isNew = !CURRENT_VERSION || (remoteSha7 !== 'unknown' && CURRENT_VERSION !== remoteSha7);
-
-    if (isNew) {
-      btn.className = 'btn-update has-update';
-      icon.textContent = '🆕';
-      label.textContent = 'Nueva versión';
-      btn.disabled = false;
-      btn.onclick = () => openUpdateModal(currentLabel, version);
-      if (manual) openUpdateModal(currentLabel, version);
-    } else {
-      btn.className = 'btn-update up-to-date';
-      icon.textContent = '✅';
-      label.textContent = 'Al día';
-      btn.disabled = false;
-      btn.onclick = () => checkForUpdates(true);
-      if (manual) toast('✅ Ya tienes la última versión (' + version + ')');
-      // Restaurar botón normal tras 4s
-      setTimeout(() => {
-        btn.className = 'btn-update';
-        icon.textContent = '↻';
-        label.textContent = 'Actualizar';
-        btn.onclick = () => checkForUpdates(true);
-      }, 4000);
-    }
-  } catch(err) {
-    btn.className = 'btn-update';
-    icon.textContent = '↻';
-    label.textContent = 'Actualizar';
-    btn.disabled = false;
-    btn.onclick = () => checkForUpdates(true);
-    if (manual) toast('⚠ No se pudo comprobar: ' + err.message);
-    console.warn('[Update]', err);
-  }
-}
-
-function openUpdateModal(current, remote) {
-  document.getElementById('updateCurrentVer').textContent = current || 'desconocida';
-  document.getElementById('updateNewVer').textContent = remote;
-  document.getElementById('updateModalTitle').textContent = '🚀 Nueva versión disponible';
-  document.getElementById('updateModalSub').textContent = 'Descarga e instala la última versión desde GitHub.';
-  document.getElementById('updateNote').textContent = '';
-  document.getElementById('btnInstallUpdate').disabled = false;
-  document.getElementById('btnInstallUpdate').textContent = '↻ Actualizar ahora';
-  document.getElementById('updateModal').classList.add('open');
-}
-
-function closeUpdateModal() {
-  document.getElementById('updateModal').classList.remove('open');
-}
-
-async function installUpdate() {
-  const note = document.getElementById('updateNote');
-  const btnInstall = document.getElementById('btnInstallUpdate');
-
-  btnInstall.disabled = true;
-  btnInstall.textContent = '⏳ Limpiando caché...';
-  note.style.color = 'var(--muted)';
-  note.textContent = 'Borrando caché y actualizando...';
-
-  try {
-    // Borrar todos los caches del service worker
-    if ('caches' in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
-    }
-
-    // Desregistrar service workers para forzar descarga limpia
-    if ('serviceWorker' in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map(r => r.unregister()));
-    }
-
-    note.style.color = 'var(--green)';
-    note.textContent = '✅ Caché borrada. Recargando...';
-    btnInstall.textContent = '✅ Actualizando...';
-
-    // Pequeña pausa para que el usuario vea el mensaje, luego recarga forzada
-    setTimeout(() => {
-      location.href = location.href.split('?')[0] + '?v=' + Date.now();
-    }, 800);
-
-  } catch(err) {
-    // Si falla, intentar recarga directa igualmente
-    note.style.color = 'var(--muted)';
-    note.textContent = 'Recargando...';
-    setTimeout(() => {
-      location.href = location.href.split('?')[0] + '?v=' + Date.now();
-    }, 500);
-  }
-}
-
-// Comprobar silenciosamente al cargar (sin abrir modal automáticamente)
-// Solo comprobar actualizaciones si estamos en https (no en file://)
-if (location.protocol === 'https:') {
-  window.addEventListener('load', () => setTimeout(() => checkForUpdates(false), 2000));
-} else {
-  // En local: ocultar el botón de actualización
-  window.addEventListener('load', () => {
-    const btn = document.getElementById('btnUpdate');
-    if (btn) btn.style.display = 'none';
-  });
-}
-</script>
-
-<script>
-// Service Worker — solo en contextos compatibles (no iOS Safari en algunos dominios)
+// Service Worker — gestiona actualizaciones automáticas
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js')
-      .then(reg => console.log('SW registrado:', reg.scope))
-      .catch(() => {}); // silenciar errores de SW en iOS
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Cuando hay un nuevo SW esperando, mostrar banner
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner();
+          }
+        });
+      });
+    }).catch(() => {});
+
+    // Escuchar mensajes del SW
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data && e.data.type === 'UPDATE_AVAILABLE') showUpdateBanner();
+    });
   });
+}
+
+function showUpdateBanner() {
+  const banner = document.getElementById('updateBanner');
+  if (banner) banner.style.display = 'flex';
+}
+
+function applyUpdate() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (reg && reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+    });
+  }
+  location.reload();
 }
 </script>
 </body>
