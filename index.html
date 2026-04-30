@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Incidencias">
-<meta name="app-version" content="__COMMIT_SHA__">
+<meta name="app-version" content="8844a72">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Analizador de Incidencias · Cartera</title>
@@ -2202,7 +2202,7 @@ const GITHUB_FILE = 'index.html';
 // SHA del commit con el que se instaló este archivo (se incrusta automáticamente al instalar)
 const CURRENT_VERSION = (() => {
   const m = document.querySelector('meta[name="app-version"]');
-  if (!m || !m.content || m.content === '__COMMIT_SHA__') return null; // sin versión conocida
+  if (!m || !m.content || m.content === '8844a72') return null; // sin versión conocida
   return m.content;
 })();
 
@@ -2226,7 +2226,7 @@ async function _fetchRemoteVersion() {
 
   // Extraer el SHA del meta app-version del archivo remoto
   const match = html.match(/<meta name="app-version" content="([^"]+)"/);
-  const remoteSha7 = (match && match[1] !== '__COMMIT_SHA__') ? match[1] : null;
+  const remoteSha7 = (match && match[1] !== '8844a72') ? match[1] : null;
 
   // Extraer la fecha del título o usar hoy como fallback
   const today = new Date().toISOString().slice(0,10);
