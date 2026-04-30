@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Incidencias">
-<meta name="app-version" content="local">
+<meta name="app-version" content="__COMMIT_SHA__">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Analizador de Incidencias · Cartera</title>
@@ -177,8 +177,12 @@
   main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   @media (max-width: 640px) {
     main { padding: 16px 12px; }
-    header { padding: 0 16px; }
+    header { padding: 0 12px; }
     .tabs { padding: 0 12px; }
+    .date-badge { display: none; }
+    .btn-update { padding: 6px 10px; }
+    #updateLabel { display: none; }
+    .logo-sub { display: none; }
   }
   .panel { display: none; }
   .panel.active { display: block; }
@@ -1442,7 +1446,6 @@ function updateStorageBadge(hasSaved) {
 
 
 loadMaestroFromStorage();
-loadMaestroFromSheets();
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MAESTRO EDITOR
@@ -2196,30 +2199,40 @@ const GITHUB_BRANCH = 'main';
 const GITHUB_FILE = 'index.html';       
 // ▲▲▲ ─────────────────────────────────────────── ▲▲▲
 
-// La versión actual se detecta automáticamente desde la etiqueta <meta name="app-version">
-// Si no existe esa meta, se usa la fecha de modificación del archivo como fallback.
+// SHA del commit con el que se instaló este archivo (se incrusta automáticamente al instalar)
 const CURRENT_VERSION = (() => {
   const m = document.querySelector('meta[name="app-version"]');
-  return m ? m.content : null;
+  if (!m || !m.content || m.content === '__COMMIT_SHA__') return null; // sin versión conocida
+  return m.content;
 })();
 
 let _remoteVersion = null;
 let _remoteUrl = null;
+let _remoteHtml = null;
 
 function _githubRawUrl() {
   return `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_FILE}`;
 }
 
 async function _fetchRemoteVersion() {
-  // Intenta obtener la versión via API de GitHub (evita caché con timestamp)
-  const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/commits?path=${GITHUB_FILE}&per_page=1`;
-  const res = await fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } });
-  if (!res.ok) throw new Error('GitHub API: ' + res.status);
-  const commits = await res.json();
-  if (!commits.length) throw new Error('Sin commits en GitHub');
-  const sha = commits[0].sha.slice(0, 7);
-  const date = commits[0].commit.author.date.slice(0,10); // YYYY-MM-DD
-  return { version: date + '-' + sha, sha: commits[0].sha };
+  // Usamos raw.githubusercontent.com — tiene CORS abierto y funciona en WebView
+  const rawUrl = _githubRawUrl() + '?t=' + Date.now();
+  const res = await fetch(rawUrl, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Raw fetch: ' + res.status);
+  const html = await res.text();
+
+  // Guardar el html remoto para instalarlo sin descargarlo dos veces
+  _remoteHtml = html;
+
+  // Extraer el SHA del meta app-version del archivo remoto
+  const match = html.match(/<meta name="app-version" content="([^"]+)"/);
+  const remoteSha7 = (match && match[1] !== '__COMMIT_SHA__') ? match[1] : null;
+
+  // Extraer la fecha del título o usar hoy como fallback
+  const today = new Date().toISOString().slice(0,10);
+  const version = remoteSha7 ? (today + '-' + remoteSha7) : today;
+
+  return { version, sha: remoteSha7 || 'unknown', fullSha: remoteSha7 || 'unknown' };
 }
 
 async function checkForUpdates(manual = false) {
@@ -2238,8 +2251,10 @@ async function checkForUpdates(manual = false) {
     _remoteVersion = version;
     _remoteUrl = _githubRawUrl() + '?nocache=' + sha;
 
-    const currentLabel = CURRENT_VERSION || 'desconocida';
-    const isNew = !CURRENT_VERSION || version !== CURRENT_VERSION;
+    const currentLabel = CURRENT_VERSION ? CURRENT_VERSION.slice(0,7) : 'desconocida';
+    // Compara SHA completo (7 chars del meta) con SHA del último commit
+    const remoteSha7 = sha.length > 7 ? sha.slice(0,7) : sha;
+    const isNew = !CURRENT_VERSION || (remoteSha7 !== 'unknown' && CURRENT_VERSION !== remoteSha7);
 
     if (isNew) {
       btn.className = 'btn-update has-update';
@@ -2300,9 +2315,22 @@ async function installUpdate() {
   note.textContent = 'Conectando con GitHub...';
 
   try {
-    const res = await fetch(_remoteUrl);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const html = await res.text();
+    // Usar el HTML ya descargado al comprobar, o volver a descargar si no está
+    let html = _remoteHtml;
+    if (!html) {
+      const res = await fetch(_githubRawUrl() + '?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      html = await res.text();
+    }
+
+    // Incrustar el SHA del commit en el meta app-version del archivo descargado
+    if (_remoteVersion) {
+      const remoteSha7 = _remoteVersion.split('-').pop();
+      html = html.replace(
+        /<meta name="app-version" content="[^"]*">/,
+        `<meta name="app-version" content="${remoteSha7}">`
+      );
+    }
 
     // Crear un blob y descargarlo con el nombre correcto
     const blob = new Blob([html], { type: 'text/html' });
@@ -2326,7 +2354,16 @@ async function installUpdate() {
 }
 
 // Comprobar silenciosamente al cargar (sin abrir modal automáticamente)
-window.addEventListener('load', () => setTimeout(() => checkForUpdates(false), 2000));
+// Solo comprobar actualizaciones si estamos en https (no en file://)
+if (location.protocol === 'https:') {
+  window.addEventListener('load', () => setTimeout(() => checkForUpdates(false), 2000));
+} else {
+  // En local: ocultar el botón de actualización
+  window.addEventListener('load', () => {
+    const btn = document.getElementById('btnUpdate');
+    if (btn) btn.style.display = 'none';
+  });
+}
 </script>
 
 <script>
