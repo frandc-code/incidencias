@@ -697,7 +697,7 @@
       </div>
     </div>
     <div class="update-modal-actions">
-      <button class="btn btn-primary" id="btnInstallUpdate" onclick="installUpdate()">⬇ Instalar actualización</button>
+      <button class="btn btn-primary" id="btnInstallUpdate" onclick="installUpdate()">↻ Actualizar ahora</button>
       <button class="btn btn-secondary" onclick="closeUpdateModal()">Ahora no</button>
     </div>
     <div id="updateNote" style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center;min-height:16px"></div>
@@ -2296,7 +2296,7 @@ function openUpdateModal(current, remote) {
   document.getElementById('updateModalSub').textContent = 'Descarga e instala la última versión desde GitHub.';
   document.getElementById('updateNote').textContent = '';
   document.getElementById('btnInstallUpdate').disabled = false;
-  document.getElementById('btnInstallUpdate').textContent = '⬇ Instalar actualización';
+  document.getElementById('btnInstallUpdate').textContent = '↻ Actualizar ahora';
   document.getElementById('updateModal').classList.add('open');
 }
 
@@ -2307,49 +2307,41 @@ function closeUpdateModal() {
 async function installUpdate() {
   const note = document.getElementById('updateNote');
   const btnInstall = document.getElementById('btnInstallUpdate');
-  if (!_remoteUrl) { note.textContent = '⚠ URL no disponible. Intenta comprobar de nuevo.'; return; }
 
   btnInstall.disabled = true;
-  btnInstall.textContent = '⏳ Descargando...';
+  btnInstall.textContent = '⏳ Limpiando caché...';
   note.style.color = 'var(--muted)';
-  note.textContent = 'Conectando con GitHub...';
+  note.textContent = 'Borrando caché y actualizando...';
 
   try {
-    // Usar el HTML ya descargado al comprobar, o volver a descargar si no está
-    let html = _remoteHtml;
-    if (!html) {
-      const res = await fetch(_githubRawUrl() + '?t=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      html = await res.text();
+    // Borrar todos los caches del service worker
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
     }
 
-    // Incrustar el SHA del commit en el meta app-version del archivo descargado
-    if (_remoteVersion) {
-      const remoteSha7 = _remoteVersion.split('-').pop();
-      html = html.replace(
-        /<meta name="app-version" content="[^"]*">/,
-        `<meta name="app-version" content="${remoteSha7}">`
-      );
+    // Desregistrar service workers para forzar descarga limpia
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
     }
-
-    // Crear un blob y descargarlo con el nombre correcto
-    const blob = new Blob([html], { type: 'text/html' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'index.html';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
 
     note.style.color = 'var(--green)';
-    note.textContent = '✅ Archivo descargado. Reemplaza el index.html actual con el descargado y recarga la página.';
-    btnInstall.textContent = '✅ Descargado';
+    note.textContent = '✅ Caché borrada. Recargando...';
+    btnInstall.textContent = '✅ Actualizando...';
+
+    // Pequeña pausa para que el usuario vea el mensaje, luego recarga forzada
+    setTimeout(() => {
+      location.href = location.href.split('?')[0] + '?v=' + Date.now();
+    }, 800);
+
   } catch(err) {
-    note.style.color = 'var(--red)';
-    note.textContent = '⚠ Error al descargar: ' + err.message;
-    btnInstall.disabled = false;
-    btnInstall.textContent = '↻ Reintentar';
+    // Si falla, intentar recarga directa igualmente
+    note.style.color = 'var(--muted)';
+    note.textContent = 'Recargando...';
+    setTimeout(() => {
+      location.href = location.href.split('?')[0] + '?v=' + Date.now();
+    }, 500);
   }
 }
 
