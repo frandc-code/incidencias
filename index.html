@@ -889,11 +889,9 @@ function handleFile(file) {
           }
 
           const ws = wb.Sheets[wb.SheetNames[0]];
-          // raw:false + dateNF para que xlsx.js convierta fechas a strings 'yyyy-mm-dd'
-          const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, dateNF:'yyyy-mm-dd'});
-          // LOG diagnóstico — primeras 10 filas con tipos
-          console.log('[FmtB] Primeras 10 filas:');
-          rows.slice(0,10).forEach((r,i)=>console.log(i, JSON.stringify(r), typeof r[0]));
+          // cellDates:true en XLSX.read ya convierte fechas a Date objects
+          // Usamos raw:true para recibir números como números y Date como Date
+          const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true});
 
           let curCod = null, curNom = null, curFecha = null;
 
@@ -902,33 +900,15 @@ function handleFile(file) {
             if (!r || r.length === 0) continue;
             const v0 = r[0];
             const v1 = r[1];
-            const c0 = v0 != null ? String(v0).trim() : '';
+            const c0 = (v0 != null && !(v0 instanceof Date)) ? String(v0).trim() : '';
 
             // Saltar cabecera y totales
-            if (!c0 || c0 === 'Etiquetas de fila' || c0.startsWith('Total')) continue;
+            if (v0 == null) continue;
+            if (typeof v0 === 'string' && (!v0.trim() || v0.trim() === 'Etiquetas de fila' || v0.trim().startsWith('Total'))) continue;
 
-            // ¿Es fecha? — con raw:false, xlsx devuelve fechas como string 'dd/mm/yyyy' o 'yyyy-mm-dd'
-            // También puede venir como número serial si la celda no tiene formato de fecha
-            const dateFromSerial = (n) => {
-              if (typeof n !== 'number' || n < 40000 || n > 60000) return null;
-              const d = new Date(Math.round((n - 25569) * 86400 * 1000));
-              return isNaN(d) ? null : d;
-            };
-            const dateFromStr = (s) => {
-              // yyyy-mm-dd
-              if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s);
-              // dd/mm/yyyy
-              const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-              if (m) return new Date(+m[3], +m[2]-1, +m[1]);
-              return null;
-            };
-
-            let fechaCandidata = null;
-            if (typeof v0 === 'number') fechaCandidata = dateFromSerial(v0);
-            else if (typeof v0 === 'string') fechaCandidata = dateFromStr(v0.trim());
-
-            if (fechaCandidata && !isNaN(fechaCandidata)) {
-              curFecha = fechaCandidata; curFecha.setHours(0,0,0,0);
+            // ¿Es fecha? — con cellDates:true xlsx devuelve Date objects
+            if (v0 instanceof Date) {
+              curFecha = new Date(v0); curFecha.setHours(0,0,0,0);
               continue;
             }
 
@@ -946,11 +926,9 @@ function handleFile(file) {
               continue;
             }
 
-            // ¿Es número de factura? (FP, FC, AB, RE, NC, FRA…)
-            if (curCod && curFecha && /^(FP|FC|AB|RE|NC|FRA)[\/\d]/i.test(c0)) {
-              const importe = typeof v1 === 'number'
-                ? v1
-                : parseFloat(String(v1 || '0').replace(/\./g,'').replace(',','.'));
+            // ¿Es número de factura? cualquier string alfanumérico con / cuando hay fecha activa
+            if (curCod && curFecha && typeof v0 === 'string' && v0.includes('/')) {
+              const importe = typeof v1 === 'number' ? v1 : parseFloat(String(v1 || '0').replace(',','.'));
               if (isNaN(importe) || importe === 0) continue;
               const nombreFinal = curNom || (maestro[curCod] ? maestro[curCod].n : curCod);
               allData.push({
@@ -1219,7 +1197,7 @@ function clientCard(r, lim365, lim45, extraBadges) {
 }
 
 function renderVendorTabs() {
-  const allV = [4,5,7,8,9,11,12,15,16,18,19,30,31,32,33];
+  const allV = [0,4,5,7,8,9,11,12,15,16,18,19,30,31,32,33];
   const presentV = [...new Set(analysisResults.map(r=>r.vSheet))].sort((a,b)=>a-b);
   const loadedV = [...new Set(allData.map(r=>r.vSheet))].filter(v=>allV.includes(v)).sort((a,b)=>a-b);
   const vendorsToShow = [...new Set([...presentV, ...loadedV])].sort((a,b)=>a-b);
@@ -1269,7 +1247,7 @@ function renderReport() {
   let html = '';
 
   if (currentVendor === 'all') {
-    const allVendedores = [4,5,7,8,9,11,12,15,16,18,19,30,31,32,33];
+    const allVendedores = [0,4,5,7,8,9,11,12,15,16,18,19,30,31,32,33];
     const vendedoresPresentes = [...new Set(analysisResults.map(r=>r.vSheet))].sort((a,b)=>a-b);
     const vendedoresToRender = allVendedores.filter(v => vendedoresPresentes.includes(v));
     vendedoresToRender.forEach(v => {
@@ -1448,7 +1426,6 @@ function updateStorageBadge(hasSaved) {
 
 
 loadMaestroFromStorage();
-loadMaestroFromSheets();
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MAESTRO EDITOR
@@ -1736,6 +1713,7 @@ function exportExcel() {
       lista.forEach(r => {
         const bg = toggle ? bgImpar : bgPar;
         toggle = !toggle;
+        let clienteTotalIni = 0, clienteTotalPend = 0;
         r.allRows.forEach((f, i) => {
           const pend = f.pend ?? f.imp;
           const abono = f.imp < 0;
@@ -1747,6 +1725,7 @@ function exportExcel() {
           else if (isOld1y) estado = '>1 año ⚠';
           else if (isVencida) estado = 'Vencida';
           const factColor = isOld1y ? C_FACT_1Y : isVencida ? C_FACT_OLD : null;
+          clienteTotalIni += f.imp; clienteTotalPend += pend;
           if (!abono) { totalIni += f.imp; totalPend += pend; }
           const row = [
             i===0 ? r.cod    : '',
@@ -1765,6 +1744,15 @@ function exportExcel() {
             return s;
           }));
         });
+        // Fila total por cliente
+        const totalRow = ['','','','','','Total cliente →', clienteTotalIni, clienteTotalPend, ''];
+        addRow(totalRow, totalRow.map((_, ci) => {
+          const s = cs(bg, true, '1A1F36');
+          s.font.italic = true;
+          s.border = { top: { style: 'thin', color: { rgb: 'AABBCC' } }, bottom: { style: 'thin', color: { rgb: 'AABBCC' } } };
+          if (ci >= 6) s.alignment = { vertical:'center', horizontal:'right' };
+          return s;
+        }));
       });
       return { totalIni, totalPend };
     }
@@ -1797,9 +1785,11 @@ function exportExcel() {
       antiguas3.sort((a,b)=>a.r.nombre.localeCompare(b.r.nombre)).forEach(({r, filas}) => {
         const bg = toggle ? C_PUR_LIGHT2 : C_PUR_LIGHT;
         toggle = !toggle;
+        let clienteTotalIni = 0, clienteTotalPend = 0;
         filas.sort((a,b)=>a.fecha-b.fecha).forEach((f, i) => {
           const pend = f.pend ?? f.imp;
           totalIni += f.imp; totalPend += pend;
+          clienteTotalIni += f.imp; clienteTotalPend += pend;
           const row = [
             i===0 ? r.cod    : '',
             i===0 ? r.nombre : '',
@@ -1817,6 +1807,15 @@ function exportExcel() {
             return s;
           }));
         });
+        // Fila total por cliente
+        const totalRow = ['','','','','','Total cliente →', clienteTotalIni, clienteTotalPend, ''];
+        addRow(totalRow, totalRow.map((_, ci) => {
+          const s = cs(bg, true, '1A1F36');
+          s.font.italic = true;
+          s.border = { top: { style: 'thin', color: { rgb: 'AABBCC' } }, bottom: { style: 'thin', color: { rgb: 'AABBCC' } } };
+          if (ci >= 6) s.alignment = { vertical:'center', horizontal:'right' };
+          return s;
+        }));
       });
       addTotalRow(totalIni, totalPend, C_HEADER_PURPLE);
       addEmptyRow();
