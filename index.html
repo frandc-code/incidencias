@@ -2086,13 +2086,29 @@ function shareVendedor(v) {
 
   // Generate image — usando base64 para compatibilidad con WebView/APK
   setTimeout(() => {
+    // Calcular scale dinámico: más contenido = más escala para mantener legibilidad
+    // Mínimo 3, máximo 5. Para listas largas el canvas es grande y necesitamos más densidad de píxeles.
+    const contentHeight = canvas.scrollHeight || canvas.offsetHeight || 800;
+    const baseScale = Math.min(5, Math.max(3, Math.ceil(contentHeight / 400)));
+
+    // Forzar ancho fijo del canvas para que no dependa del viewport
+    canvas.style.width = '420px';
+
     html2canvas(canvas, {
-      scale: 2,
+      scale: baseScale,
       backgroundColor: '#ffffff',
       useCORS: true,
       logging: false,
+      width: 420,
+      windowWidth: 420,
+      scrollX: 0,
+      scrollY: 0,
     }).then(cvs => {
-      shareImageBase64 = cvs.toDataURL('image/png');
+      // Comprimir a JPEG si la imagen es grande (>600px alto) para evitar archivos enormes
+      const isLong = cvs.height > 1800;
+      shareImageBase64 = isLong
+        ? cvs.toDataURL('image/jpeg', 0.92)
+        : cvs.toDataURL('image/png');
       const preview = document.getElementById('sharePreview');
       preview.innerHTML = `<img src="${shareImageBase64}" style="width:100%;display:block" alt="Preview">`;
       document.getElementById('btnDownload').disabled = false;
@@ -2100,7 +2116,7 @@ function shareVendedor(v) {
     }).catch(err => {
       document.getElementById('sharePreview').innerHTML = '<div style="padding:20px;color:var(--red);font-size:13px">⚠ Error generando imagen: ' + err.message + '</div>';
     });
-  }, 100);
+  }, 150);
 }
 
 function getShareFilename() {
@@ -2116,7 +2132,8 @@ function downloadShareImage() {
   if (!shareImageBase64) return;
   const a = document.createElement('a');
   a.href = shareImageBase64;
-  a.download = getShareFilename() + '.png';
+  const ext = shareImageBase64.startsWith('data:image/jpeg') ? '.jpg' : '.png';
+  a.download = getShareFilename() + ext;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
